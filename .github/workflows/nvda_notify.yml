@@ -1,9 +1,9 @@
-name: NVDA Hourly Alert (Market Hours)
+name: NVIDIA (NVDA) (Market Hours)
 
 on:
   schedule:
     - cron: "0 * * * *"  # ทุกชั่วโมง
-  workflow_dispatch:      # สามารถกด Run เองได้
+  workflow_dispatch:      # กด Run เองได้
 
 jobs:
   nvda_notify:
