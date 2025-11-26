@@ -51,11 +51,11 @@ def main():
     ny = pytz.timezone("America/New_York")
     now_ny = datetime.datetime.now(ny)
 
-    # แปลงชื่อเต็มของเวลา
+    # แปลงชื่อเต็มของเวลา + emoji
     if now_ny.dst() != datetime.timedelta(0):
-        tz_full = "Eastern Daylight Time"
+        tz_full = "Eastern Daylight Time ☀️"
     else:
-        tz_full = "Eastern Standard Time"
+        tz_full = "Eastern Standard Time ❄️"
 
     now_str = now_ny.strftime("%Y-%m-%d %H:%M:%S") + f" ({tz_full})"
 
@@ -73,7 +73,7 @@ def main():
 
     latest, change, percent, day_high, day_low, high_3mo, low_3mo = result
     msg = (
-        "🔔 *NVIDIA (NVDA)*\n\n"
+        "🔔 *Nvidia (NVDA)*\n\n"
         f"⏰ เวลา NY: {now_str}\n"
         f"💵 ราคา: {latest:.2f} "
         f"{'+' if change>=0 else ''}{change:.2f} "
