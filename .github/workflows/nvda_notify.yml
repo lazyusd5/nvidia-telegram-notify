@@ -1,4 +1,4 @@
-name: NVIDIA (NVDA) (Market Hours)
+name: NVIDIA (NVDA)
 
 on:
   schedule:
