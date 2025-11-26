@@ -14,7 +14,6 @@ def send_telegram(msg):
 
 def get_price():
     ticker = yf.Ticker("NVDA")
-    # ข้อมูลย้อนหลัง 5 วัน สำหรับราคาล่าสุด
     data = ticker.history(period="5d", interval="1h")
     if data.empty or len(data) < 2:
         return None
@@ -22,7 +21,7 @@ def get_price():
     latest = data['Close'].iloc[-1]
     previous = data['Close'].iloc[-2]
     change = latest - previous
-    percent = (change/previous)*100
+    percent = (change / previous) * 100
 
     # High/Low ของวันปัจจุบัน
     ny = pytz.timezone("America/New_York")
@@ -41,7 +40,7 @@ def get_price():
 def market_open_now():
     ny = pytz.timezone("America/New_York")
     now_ny = datetime.datetime.now(ny)
-    weekday = now_ny.weekday()  # 0=Mon ... 4=Fri
+    weekday = now_ny.weekday()
     if weekday >= 5:
         return False
     open_time = now_ny.replace(hour=9, minute=30, second=0, microsecond=0)
@@ -51,7 +50,14 @@ def market_open_now():
 def main():
     ny = pytz.timezone("America/New_York")
     now_ny = datetime.datetime.now(ny)
-    now_str = now_ny.strftime("%Y-%m-%d %H:%M:%S ET")
+
+    # แปลงชื่อเต็มของเวลา
+    if now_ny.dst() != datetime.timedelta(0):
+        tz_full = "Eastern Daylight Time"
+    else:
+        tz_full = "Eastern Standard Time"
+
+    now_str = now_ny.strftime("%Y-%m-%d %H:%M:%S") + f" ({tz_full})"
 
     # ตรวจสอบว่ารันด้วย workflow_dispatch หรือไม่
     run_manual = os.getenv("GITHUB_EVENT_NAME") == "workflow_dispatch"
@@ -67,7 +73,7 @@ def main():
 
     latest, change, percent, day_high, day_low, high_3mo, low_3mo = result
     msg = (
-        "🔔 *NVDA Alert*\n\n"
+        "🔔 *NVIDIA (NVDA)*\n\n"
         f"⏰ เวลา NY: {now_str}\n"
         f"💵 ราคา: {latest:.2f} "
         f"{'+' if change>=0 else ''}{change:.2f} "
