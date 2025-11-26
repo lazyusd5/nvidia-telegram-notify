@@ -1,5 +1,4 @@
 import yfinance as yf
-import matplotlib.pyplot as plt
 import datetime
 import pytz
 import os
@@ -8,20 +7,14 @@ import requests
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 
-def send_telegram(msg, image_path=None):
-    if image_path:
-        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendPhoto"
-        files = {"photo": open(image_path, "rb")}
-        data = {"chat_id": CHAT_ID, "caption": msg, "parse_mode": "Markdown"}
-        requests.post(url, data=data, files=files)
-    else:
-        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-        data = {"chat_id": CHAT_ID, "text": msg, "parse_mode": "Markdown"}
-        requests.post(url, data=data)
+def send_telegram(msg):
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+    data = {"chat_id": CHAT_ID, "text": msg, "parse_mode": "Markdown"}
+    requests.post(url, data=data)
 
 def get_price():
     ticker = yf.Ticker("NVDA")
-    # ข้อมูลย้อนหลัง 5 วัน สำหรับกราฟ + ราคาล่าสุด
+    # ข้อมูลย้อนหลัง 5 วัน สำหรับราคาล่าสุด
     data = ticker.history(period="5d", interval="1h")
     if data.empty or len(data) < 2:
         return None
@@ -43,20 +36,7 @@ def get_price():
     high_3mo = data_3mo['High'].max()
     low_3mo = data_3mo['Low'].min()
 
-    return latest, change, percent, day_high, day_low, high_3mo, low_3mo, data
-
-def plot_graph(data):
-    plt.figure(figsize=(8,4))
-    plt.plot(data.index, data['Close'], marker='o', linestyle='-')
-    plt.title("NVDA Stock Price (Last 5 Days)")
-    plt.xlabel("Date/Time (NY)")
-    plt.ylabel("Price (USD)")
-    plt.grid(True)
-    path = "nvda_chart.png"
-    plt.tight_layout()
-    plt.savefig(path)
-    plt.close()
-    return path
+    return latest, change, percent, day_high, day_low, high_3mo, low_3mo
 
 def market_open_now():
     ny = pytz.timezone("America/New_York")
@@ -71,7 +51,7 @@ def market_open_now():
 def main():
     ny = pytz.timezone("America/New_York")
     now_ny = datetime.datetime.now(ny)
-    now_str = now_ny.strftime("%Y-%m-%d %H:%M:%S ET")  # เวลา NY
+    now_str = now_ny.strftime("%Y-%m-%d %H:%M:%S ET")
 
     if not market_open_now():
         print(f"ตลาดยังไม่เปิด ({now_str}) → ไม่ส่ง Telegram")
@@ -82,7 +62,7 @@ def main():
         send_telegram(f"❗ ไม่พบข้อมูลราคาหุ้น NVDA ({now_str})")
         return
 
-    latest, change, percent, day_high, day_low, high_3mo, low_3mo, data = result
+    latest, change, percent, day_high, day_low, high_3mo, low_3mo = result
     msg = (
         "🔔 *NVDA Hourly Alert*\n\n"
         f"⏰ เวลา NY: {now_str}\n"
@@ -93,8 +73,7 @@ def main():
         f"📊 ช่วง 3 เดือน: {low_3mo:.2f} - {high_3mo:.2f}"
     )
 
-    chart_path = plot_graph(data)
-    send_telegram(msg, chart_path)
+    send_telegram(msg)
 
 if __name__ == "__main__":
     main()
