@@ -4,8 +4,8 @@ import datetime
 import pytz
 import os
 
-TELEGRAM_TOKEN = os.getenv("8215957066:AAH0XbvKfC0MC9JpZIas9UUoqS653vgG9Wc")
-CHAT_ID = os.getenv("-5016115009")
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+CHAT_ID = os.getenv("CHAT_ID")
 
 def send_telegram(msg):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
@@ -15,10 +15,8 @@ def send_telegram(msg):
 def get_price():
     ticker = yf.Ticker("NVDA")
     data = ticker.history(period="1d", interval="1m")
-
     if data.empty:
         return None
-
     return data["Close"].iloc[-1]
 
 def main():
@@ -26,7 +24,6 @@ def main():
     now = datetime.datetime.now(bangkok).strftime("%Y-%m-%d %H:%M:%S")
 
     price = get_price()
-
     if price is None:
         send_telegram(f"❗ Error: ไม่พบข้อมูลราคาหุ้น NVDA ({now})")
         return
