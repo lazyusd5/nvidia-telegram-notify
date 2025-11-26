@@ -78,7 +78,7 @@ def main():
 
     latest, change, percent, day_high, day_low, data = result
     msg = (
-        "🔔 *NVDA Hourly Alert*\n\n"
+        "🔔 *NVIDIA (NVDA)*\n\n"
         f"⏰ เวลา NY: {now_str}\n"
         f"💵 ราคา: {latest:.2f} "
         f"{'+' if change>=0 else ''}{change:.2f} "
