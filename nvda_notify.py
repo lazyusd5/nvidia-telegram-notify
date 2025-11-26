@@ -5,7 +5,6 @@ import pytz
 import os
 import requests
 
-# ดึง Secrets จาก GitHub
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 
@@ -29,8 +28,15 @@ def get_price():
     previous = data['Close'].iloc[-2]
     change = latest - previous
     percent = (change/previous)*100
-    day_high = data['High'].iloc[-1]
-    day_low = data['Low'].iloc[-1]
+
+    # เลือกข้อมูลของวันวันนี้ (NY time)
+    ny = pytz.timezone("America/New_York")
+    today_ny = datetime.datetime.now(ny).date()
+    today_data = data[data.index.date == today_ny]
+
+    day_high = today_data['High'].max()
+    day_low = today_data['Low'].min()
+
     return latest, change, percent, day_high, day_low, data
 
 def plot_graph(data):
@@ -47,7 +53,6 @@ def plot_graph(data):
     return path
 
 def market_open_now():
-    """เช็กเวลาตลาด NASDAQ (ปรับ EST/EDT อัตโนมัติ)"""
     ny = pytz.timezone("America/New_York")
     now_ny = datetime.datetime.now(ny)
     weekday = now_ny.weekday()  # 0=Mon ... 4=Fri
@@ -78,7 +83,7 @@ def main():
         f"💵 ราคา: {latest:.2f} "
         f"{'+' if change>=0 else ''}{change:.2f} "
         f"({'+' if percent>=0 else ''}{percent:.2f}%)\n"
-        f"📈 High: {day_high:.2f}  📉 Low: {day_low:.2f}"
+        f"📈 High วันนี้: {day_high:.2f}  📉 Low วันนี้: {day_low:.2f}"
     )
 
     chart_path = plot_graph(data)
