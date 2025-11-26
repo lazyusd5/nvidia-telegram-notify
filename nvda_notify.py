@@ -53,7 +53,10 @@ def main():
     now_ny = datetime.datetime.now(ny)
     now_str = now_ny.strftime("%Y-%m-%d %H:%M:%S ET")
 
-    if not market_open_now():
+    # ตรวจสอบว่ารันด้วย workflow_dispatch หรือไม่
+    run_manual = os.getenv("GITHUB_EVENT_NAME") == "workflow_dispatch"
+
+    if not run_manual and not market_open_now():
         print(f"ตลาดยังไม่เปิด ({now_str}) → ไม่ส่ง Telegram")
         return
 
@@ -64,7 +67,7 @@ def main():
 
     latest, change, percent, day_high, day_low, high_3mo, low_3mo = result
     msg = (
-        "🔔 *NVDA Hourly Alert*\n\n"
+        "🔔 *NVDA Alert*\n\n"
         f"⏰ เวลา NY: {now_str}\n"
         f"💵 ราคา: {latest:.2f} "
         f"{'+' if change>=0 else ''}{change:.2f} "
