@@ -50,8 +50,13 @@ def main():
     if result[0] is None:
         send_telegram("❗ Error: ไม่พบข้อมูลราคาของ NVDA")
         return
-    if result[0] == "CLOSED" and not FORCE_RUN:
-        print("ตลาด NVDA ปิดวันนี้ / ไม่มีการซื้อขาย")
+
+    # กรณีตลาดปิด / ราคาปิดเท่าเดิม
+    if result[0] == "CLOSED":
+        if FORCE_RUN:
+            send_telegram("ℹ️ ตลาด NVDA ปิดวันนี้ / ราคาปิดเท่าเดิม แต่กด Manual Run")
+        else:
+            print("ตลาด NVDA ปิดวันนี้ / ไม่มีการซื้อขาย")
         return
 
     price, day_high, day_low, change_val_24h, pct_change_24h, data = result
@@ -66,7 +71,14 @@ def main():
         f"📉 Low (24h): {day_low:,.2f}\n"
         f"📊 ช่วง 3 เดือน: {high_3m:,.2f} - {low_3m:,.2f}\n"
     )
-    send_telegram(msg)
+
+    # ส่งข้อความหลักทุกครั้งถ้า Manual Run
+    if FORCE_RUN:
+        send_telegram(msg)
+    else:
+        # ส่งเฉพาะถ้าเปลี่ยนราคา
+        if pct_change_24h != 0:
+            send_telegram(msg)
 
     # Volatility Alert
     if abs(pct_change_24h) >= VOL_THRESHOLD:
