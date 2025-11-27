@@ -1,88 +1,142 @@
 import yfinance as yf
-import datetime
-import pytz
-import os
 import requests
+import pytz
+from datetime import datetime, timedelta
 
+TELEGRAM_TOKEN = TELEGRAM_TOKEN = None
+CHAT_ID = None
+
+import os
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 
-def send_telegram(msg):
-    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    data = {"chat_id": CHAT_ID, "text": msg, "parse_mode": "Markdown"}
-    requests.post(url, data=data)
+# -------------------------------
+# 🔹 ตรวจสอบ EST / EDT แบบอัตโนมัติ
+# -------------------------------
+def get_market_time():
+    tz = pytz.timezone("America/New_York")
+    now = datetime.now(tz)
 
-def get_price():
-    ticker = yf.Ticker("NVDA")
-    data = ticker.history(period="5d", interval="1h")
-    if data.empty or len(data) < 2:
-        return None
-
-    latest = data['Close'].iloc[-1]
-    previous = data['Close'].iloc[-2]
-    change = latest - previous
-    percent = (change / previous) * 100
-
-    # High/Low ของวันปัจจุบัน
-    ny = pytz.timezone("America/New_York")
-    today_ny = datetime.datetime.now(ny).date()
-    today_data = data[data.index.date == today_ny]
-    day_high = today_data['High'].max()
-    day_low = today_data['Low'].min()
-
-    # High/Low ของ 3 เดือนย้อนหลัง
-    data_3mo = ticker.history(period="3mo", interval="1d")
-    high_3mo = data_3mo['High'].max()
-    low_3mo = data_3mo['Low'].min()
-
-    return latest, change, percent, day_high, day_low, high_3mo, low_3mo
-
-def market_open_now():
-    ny = pytz.timezone("America/New_York")
-    now_ny = datetime.datetime.now(ny)
-    weekday = now_ny.weekday()
-    if weekday >= 5:
-        return False
-    open_time = now_ny.replace(hour=9, minute=30, second=0, microsecond=0)
-    close_time = now_ny.replace(hour=16, minute=0, second=0, microsecond=0)
-    return open_time <= now_ny <= close_time
-
-def main():
-    ny = pytz.timezone("America/New_York")
-    now_ny = datetime.datetime.now(ny)
-
-    # แปลงชื่อเต็มของเวลา + emoji
-    if now_ny.dst() != datetime.timedelta(0):
-        tz_full = "Eastern Daylight Time ☀️"
+    if now.dst() != timedelta(0):
+        zone = "Eastern Daylight Time 🌞"
     else:
-        tz_full = "Eastern Standard Time ❄️"
+        zone = "Eastern Standard Time ❄️"
 
-    now_str = now_ny.strftime("%Y-%m-%d %H:%M:%S") + f" ({tz_full})"
+    return now, zone
 
-    # ตรวจสอบว่ารันด้วย workflow_dispatch หรือไม่
-    run_manual = os.getenv("GITHUB_EVENT_NAME") == "workflow_dispatch"
 
-    if not run_manual and not market_open_now():
-        print(f"ตลาดยังไม่เปิด ({now_str}) → ไม่ส่ง Telegram")
-        return
+# -------------------------------
+# 🔹 ตรวจสอบว่าตลาดเปิดหรือยัง
+# -------------------------------
+def is_market_open():
+    now, _ = get_market_time()
 
-    result = get_price()
-    if result is None:
-        send_telegram(f"❗ ไม่พบข้อมูลราคาหุ้น NVDA ({now_str})")
-        return
+    # จันทร์ - ศุกร์
+    if now.weekday() >= 5:
+        return False
 
-    latest, change, percent, day_high, day_low, high_3mo, low_3mo = result
+    # ตลาดเปิด 9:30–16:00
+    market_open = now.replace(hour=9, minute=30, second=0, microsecond=0)
+    market_close = now.replace(hour=16, minute=0, second=0, microsecond=0)
+
+    return market_open <= now <= market_close
+
+
+# -------------------------------
+# 🔹 ส่งข้อความ Telegram
+# -------------------------------
+def send_message(text):
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+    requests.post(url, data={"chat_id": CHAT_ID, "text": text, "parse_mode": "Markdown"})
+
+
+# -------------------------------
+# 🔹 โหลดข้อมูลหุ้น
+# -------------------------------
+def get_stock_data():
+    ticker = yf.Ticker("NVDA")
+    data = ticker.history(period="90d")  # 3 เดือน
+
+    last = data.iloc[-1]["Close"]
+    prev = data.iloc[-2]["Close"]
+    change = last - prev
+    pct = (change / prev) * 100
+
+    high_3m = data["High"].max()
+    low_3m = data["Low"].min()
+
+    # High/Low วัน
+    day_high = data.iloc[-1]["High"]
+    day_low = data.iloc[-1]["Low"]
+
+    # High/Low 30 วัน
+    data_30 = ticker.history(period="30d")
+    high_30 = data_30["High"].max()
+    low_30 = data_30["Low"].min()
+
+    return last, change, pct, day_high, day_low, high_3m, low_3m, high_30, low_30
+
+
+# -------------------------------
+# 🔹 เช็กเหตุการณ์พิเศษ High/Low 30 วัน
+# -------------------------------
+def check_special_alerts(price, high_30, low_30):
+    alerts = []
+
+    # แตะ High 30 วัน
+    if price >= high_30:
+        alerts.append(f"⚠️ *Breakout Alert — NVDA*\n\nราคาแตะระดับสูงสุดรอบ 30 วัน\nHigh 30 วัน: {high_30:.2f}\nราคา: {price:.2f}")
+
+    # แตะ Low 30 วัน
+    if price <= low_30:
+        alerts.append(f"⚠️ *Support Alert — NVDA*\n\nราคาแตะระดับต่ำสุดรอบ 30 วัน\nLow 30 วัน: {low_30:.2f}\nราคา: {price:.2f}")
+
+    # เข้าใกล้ High ไม่เกิน 1%
+    if 0 < (high_30 - price) <= high_30 * 0.01:
+        alerts.append(f"⚠️ ราคาเข้าใกล้ High 30 วันภายใน 1%\nHigh 30 วัน: {high_30:.2f}\nราคา: {price:.2f}")
+
+    # เข้าใกล้ Low ไม่เกิน 1%
+    if 0 < (price - low_30) <= low_30 * 0.01:
+        alerts.append(f"⚠️ ราคาเข้าใกล้ Low 30 วันภายใน 1%\nLow 30 วัน: {low_30:.2f}\nราคา: {price:.2f}")
+
+    return alerts
+
+
+# -------------------------------
+# 🔹 ส่งรายงานหลัก (รายชั่วโมง)
+# -------------------------------
+def send_hourly_report():
+    price, change, pct, day_high, day_low, high_3m, low_3m, high_30, low_30 = get_stock_data()
+    now, zone = get_market_time()
+
     msg = (
-        "🔔 *Nvidia (NVDA)*\n\n"
-        f"⏰ เวลา NY: {now_str}\n"
-        f"💵 ราคา: {latest:.2f} "
-        f"{'+' if change>=0 else ''}{change:.2f} "
-        f"({'+' if percent>=0 else ''}{percent:.2f}%)\n"
-        f"📈 High: {day_high:.2f}  📉 Low: {day_low:.2f}\n"
-        f"📊 ช่วง 3 เดือน: {low_3mo:.2f} - {high_3mo:.2f}"
+        f"*Nvidia (NVDA)*\n\n"
+        f"ราคา: {price:.2f}  ({change:+.2f}, {pct:+.2f}%)\n"
+        f"High: {day_high:.2f}    Low: {day_low:.2f}\n"
+        f"ช่วง 3 เดือน: {low_3m:.2f} - {high_3m:.2f}\n\n"
+        f"เวลา: {now.strftime('%I:%M %p')} {zone}"
     )
 
-    send_telegram(msg)
+    send_message(msg)
+
+    # ส่งแจ้งเตือนพิเศษถ้ามี
+    alerts = check_special_alerts(price, high_30, low_30)
+    for alert in alerts:
+        send_message(alert)
+
+
+# -------------------------------
+# 🔹 MAIN
+# -------------------------------
+def main():
+    if is_market_open():
+        send_hourly_report()
+    else:
+        # ถ้ากด Run เอง → ให้ส่งได้
+        now, zone = get_market_time()
+        send_message(f"⚠️ ตลาดปิดอยู่ แต่คุณกด Run เอง\nเวลา: {now.strftime('%I:%M %p')} {zone}")
+        send_hourly_report()
+
 
 if __name__ == "__main__":
     main()
