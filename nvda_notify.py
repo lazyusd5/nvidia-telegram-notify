@@ -9,6 +9,9 @@ CHAT_ID = os.getenv("CHAT_ID_NVDA")  # ห้อง NVDA
 # Volatility Threshold
 VOL_THRESHOLD = 3  # % ราคาขยับ ≥3% แจ้งทันที
 
+# ตรวจสอบ Manual run
+FORCE_RUN = os.getenv("FORCE_RUN", "false").lower() == "true"
+
 def send_telegram(msg):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     data = {"chat_id": CHAT_ID, "text": msg, "parse_mode": "Markdown"}
@@ -47,7 +50,7 @@ def main():
     if result[0] is None:
         send_telegram("❗ Error: ไม่พบข้อมูลราคาของ NVDA")
         return
-    if result[0] == "CLOSED":
+    if result[0] == "CLOSED" and not FORCE_RUN:
         print("ตลาด NVDA ปิดวันนี้ / ไม่มีการซื้อขาย")
         return
 
