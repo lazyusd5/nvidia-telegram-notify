@@ -4,101 +4,106 @@ import requests
 from datetime import datetime
 import pytz
 
-# Telegram token & Chat ID
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-CHAT_ID = os.getenv("CHAT_ID_NVDA")
 
-# Volatility Threshold (เช่น 3)
-VOL_THRESHOLD = float(os.getenv("VOL_THRESHOLD", "3"))
+# ------------------------- CONFIG -------------------------
 
-# สำหรับส่งข้อความทุกครั้งเมื่อกด Run
+def get_env_float(name: str, default: float) -> float:
+    """อ่านค่า env แบบปลอดภัย ถ้าไม่มีหรือว่าง → คืน default"""
+    val = os.getenv(name, "").strip()
+
+    if val == "":
+        return default
+
+    try:
+        return float(val)
+    except:
+        return default
+
+
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "").strip()
+CHAT_ID = os.getenv("CHAT_ID_BTC", "").strip()
+
+VOL_THRESHOLD = get_env_float("VOL_THRESHOLD", 3.0)  # default = 3%
+
 FORCE_RUN = os.getenv("FORCE_RUN", "false").lower() == "true"
 
-# Timezone ตลาดหุ้นสหรัฐ
-NY_TZ = pytz.timezone("America/New_York")
+SYMBOL = "NVDA"
+TZ = pytz.timezone("US/Eastern")
 
+# ------------------------- FUNCTIONS -------------------------
 
-def send_telegram(msg):
+def send_telegram(message: str):
+    if not TELEGRAM_TOKEN or not CHAT_ID:
+        print("❌ TELEGRAM_TOKEN / CHAT_ID ไม่มี → ข้ามการส่งข้อความ")
+        return
+
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    data = {"chat_id": CHAT_ID, "text": msg, "parse_mode": "Markdown"}
-    requests.post(url, data=data)
+    payload = {"chat_id": CHAT_ID, "text": message}
+
+    try:
+        requests.post(url, data=payload, timeout=10)
+    except Exception as e:
+        print("❌ Telegram error:", e)
 
 
-def get_nvda_data():
-    ticker = yf.Ticker("NVDA")
-
-    # 5m data เบาขึ้นมาก
-    data_1d_5m = ticker.history(period="1d", interval="5m")
-    # ใช้ข้อมูล 2 วันย้อนหลัง เพื่อให้ดูราคาเดิม 24 ชั่วโมงก่อน
-    data_2d_daily = ticker.history(period="2d", interval="1d")
-
-    if data_1d_5m.empty or data_2d_daily.empty:
-        return None, None, None, None, None
-
-    # ราคาปิดเมื่อวาน
-    prev_close = data_2d_daily["Close"].iloc[-2]
-
-    # ราคาปัจจุบัน
-    price = data_1d_5m["Close"].iloc[-1]
-
-    # เช็คตลาดเปิด (ถ้า price ≠ prev_close = มีการซื้อขาย)
-    market_open = price != prev_close
-
-    # High / Low 24 ชั่วโมงจาก 5m data
-    day_high = data_1d_5m["High"].max()
-    day_low = data_1d_5m["Low"].min()
-
-    # 24h change
-    change_val = price - prev_close
-    pct_change = (change_val / prev_close) * 100
-
-    return price, day_high, day_low, change_val, pct_change, market_open
+def get_price_data():
+    try:
+        ticker = yf.Ticker(SYMBOL)
+        df = ticker.history(period="1d", interval="5m")
+        if df.empty:
+            return None
+        return df
+    except:
+        return None
 
 
-def get_highlow_3m():
-    ticker = yf.Ticker("NVDA")
-    data = ticker.history(period="3mo")
-    return data["High"].max(), data["Low"].min()
-
+# ------------------------- MAIN LOGIC -------------------------
 
 def main():
-    data = get_nvda_data()
-    if data[0] is None:
-        send_telegram("❗ Error: ไม่พบข้อมูลราคาของ NVDA")
+    df = get_price_data()
+    if df is None:
+        print("❌ ERROR: ไม่มีข้อมูลราคา")
         return
 
-    price, day_high, day_low, change_val_24h, pct_change_24h, market_open = data
-    high_3m, low_3m = get_highlow_3m()
+    last = df.iloc[-1]
+    prev = df.iloc[-2] if len(df) > 1 else last
 
-    # ❗ ไม่ส่งถ้าตลาดปิด (ยกเว้น manual run)
-    if not market_open and not FORCE_RUN:
-        print("ตลาด NVDA ปิดอยู่ ไม่ส่งข้อความ")
-        return
+    price = float(last["Close"])
+    prev_price = float(prev["Close"])
 
-    # สร้างข้อความหลักทุก 6 นาที (ตาม GitHub Actions)
-    msg = (
-        f"🔔 *Nvidia (NVDA)*\n\n"
-        f"💵 ราคา: *{price:,.2f}*\n"
-        f"เปลี่ยน 24 hr. {change_val_24h:+,.2f} ({pct_change_24h:+.2f}%)\n\n"
-        f"📈 High (24h): {day_high:,.2f}\n"
-        f"📉 Low (24h): {day_low:,.2f}\n"
-        f"📊 ช่วง 3 เดือน: {high_3m:,.2f} - {low_3m:,.2f}\n"
-    )
+    # % เปลี่ยนแปลงย้อนหลัง 5 นาที
+    pct = ((price - prev_price) / prev_price) * 100 if prev_price != 0 else 0
 
-    send_telegram(msg)
+    now = datetime.now(TZ).strftime("%Y-%m-%d %H:%M:%S")
 
-    # Volatility Alert
-    if abs(pct_change_24h) >= VOL_THRESHOLD:
-        vol_msg = (
-            f"⚡ *Volatility Alert — NVDA*\n\n"
-            f"ราคาผันผวนเกิน {VOL_THRESHOLD}% ใน 24 ชั่วโมง\n"
-            f"ราคา: {price:,.2f} ({pct_change_24h:+.2f}%)\n\n"
-            f"📈 High (24h): {day_high:,.2f}\n"
-            f"📉 Low (24h): {day_low:,.2f}\n"
-            f"📊 ช่วง 3 เดือน: {high_3m:,.2f} - {low_3m:,.2f}"
+    # ส่งเสมอถ้า FORCE_RUN = true
+    if FORCE_RUN:
+        msg = (
+            f"📢 Manual Run NVDA Alert\n"
+            f"Time: {now}\n"
+            f"Price: {price:.2f}\n"
+            f"Change (5m): {pct:.2f}%"
         )
-        send_telegram(vol_msg)
+        send_telegram(msg)
+        print("✔ ส่งข้อความ manual แล้ว")
+        return
 
+    # เช็ค % สูงกว่าค่า threshold
+    if abs(pct) >= VOL_THRESHOLD:
+        arrow = "📈" if pct > 0 else "📉"
+        msg = (
+            f"{arrow} NVDA Alert ({SYMBOL})\n"
+            f"Time: {now}\n"
+            f"Price: {price:.2f}\n"
+            f"Change (5m): {pct:.2f}% (trigger ≥ {VOL_THRESHOLD}%)"
+        )
+        send_telegram(msg)
+        print("✔ ส่งแจ้งเตือนแล้ว")
+    else:
+        print(f"ℹ NVDA: {pct:.2f}% ยังไม่ถึง threshold {VOL_THRESHOLD}% → ไม่ส่งข้อความ")
+
+
+# ------------------------- RUN -------------------------
 
 if __name__ == "__main__":
     main()
