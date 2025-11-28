@@ -26,8 +26,6 @@ jobs:
       - name: Run NVDA Notify Script
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-          CHAT_ID_NVDA: ${{ secrets.CHAT_ID_NVDA }}
-          VOL_THRESHOLD: ${{ secrets.VOL_THRESHOLD }}
-          FORCE_RUN: ${{ secrets.FORCE_RUN }}
+          CHAT_ID_BTC: ${{ secrets.CHAT_ID_BTC }}
         run: |
           python nvda_notify.py
