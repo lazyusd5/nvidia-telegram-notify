@@ -2,8 +2,8 @@ name: Nvidia Alert
 
 on:
   schedule:
-    - cron: '*/6 13-21 * * 1-5'  # ทุก 6 นาที ช่วง 9:30-16:00 EST (UTC+0 = 13:30-21:00)
-  workflow_dispatch:  # กด run เองก็ได้
+    - cron: '*/6 14-20 * * 1-5'  # ทุก 6 นาทีช่วงตลาดเปิด NYSE (9:30-16:00 EST)
+  workflow_dispatch:  # กด run เองได้
 
 jobs:
   notify:
@@ -11,12 +11,15 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
+
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
           python-version: "3.11"
+
       - name: Install dependencies
         run: pip install yfinance requests pytz
+
       - name: Run NVDA alert script
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
