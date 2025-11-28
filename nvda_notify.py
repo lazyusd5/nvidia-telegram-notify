@@ -6,16 +6,9 @@ import pytz
 
 # ------------------------- CONFIG -------------------------
 
-def get_env_float(name: str, default: float) -> float:
-    val = os.getenv(name, "").strip()
-    try:
-        return float(val) if val else default
-    except:
-        return default
-
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "").strip()
 CHAT_ID = os.getenv("CHAT_ID_BTC", "").strip()
-VOL_THRESHOLD = get_env_float("VOL_THRESHOLD", 3.0)
+VOL_THRESHOLD = 3.0  # % change สำหรับ Volatility Alert
 
 SYMBOL = "NVDA"
 NY_TZ = pytz.timezone("America/New_York")
@@ -61,11 +54,9 @@ def get_price_data():
 
 def get_time_icon(dt):
     hour = dt.hour
-    # กลางวัน 6:00–17:59 → EDT 🌞
     if 6 <= hour < 18:
         return "⏰ Eastern Daylight Time 🌞"
     else:
-        # กลางคืน → EST ❄️
         return "⏰ Eastern Standard Time ❄️"
 
 # ------------------------- MAIN -------------------------
@@ -80,19 +71,16 @@ def main():
 
     market_open = price != day_low  # ตลาดเปิด simplified check
 
-    # เช็ค Manual Run
+    # Manual Run check
     is_manual_run = os.getenv("GITHUB_EVENT_NAME", "") == "workflow_dispatch"
 
     if not market_open and not is_manual_run:
         print("ℹ ตลาดปิด → ไม่ส่งข้อความ")
         return
 
-    # เวลาและ icon
     est_time = timestamp.tz_convert(NY_TZ)
     time_icon = get_time_icon(est_time)
-    time_str = est_time.strftime("%Y-%m-%d %H:%M:%S")
 
-    # ------------------------- ข้อความ Telegram -------------------------
     msg = (
         f"🔔 *Nvidia (NVDA)*\n\n"
         f"\n💵 ราคา: {price:.2f}  {pct_change:+.2f} ({pct_change:+.2f}%)\n\n"
@@ -100,10 +88,8 @@ def main():
         f"📊 ช่วง 3 เดือน: {low_3m:.2f} - {high_3m:.2f}\n\n"
         f"{time_icon}"
     )
-
     send_telegram(msg)
 
-    # Volatility Alert
     if abs(pct_change) >= VOL_THRESHOLD:
         arrow = "📈" if pct_change > 0 else "📉"
         vol_msg = (
