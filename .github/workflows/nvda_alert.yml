@@ -2,7 +2,7 @@ name: Nvidia Alert
 
 on:
   schedule:
-    - cron: '*/6 14-20 * * 1-5'  # ทุก 6 นาทีช่วงตลาดเปิด NYSE (9:30-16:00 EST)
+    - cron: '*/59 14-20 * * 1-5'  # ทุก 6 นาทีช่วงตลาดเปิด NYSE (9:30-16:00 EST)
   workflow_dispatch:  # กด run เองได้
 
 jobs:
